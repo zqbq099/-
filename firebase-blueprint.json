@@ -1,0 +1,59 @@
+{
+  "entities": {
+    "User": {
+      "title": "User",
+      "description": "A user of the application",
+      "type": "object",
+      "properties": {
+        "uid": {
+          "type": "string",
+          "description": "The user's unique identifier"
+        },
+        "role": {
+          "type": "string",
+          "enum": ["user", "admin"],
+          "description": "The user's role"
+        },
+        "plan": {
+          "type": "string",
+          "enum": ["free", "premium"],
+          "description": "The user's subscription plan"
+        },
+        "createdAt": {
+          "type": "string",
+          "format": "date-time",
+          "description": "When the user was created"
+        }
+      },
+      "required": ["uid", "role", "plan", "createdAt"]
+    },
+    "Transformation": {
+      "title": "Transformation",
+      "description": "A saved app transformation",
+      "type": "object",
+      "properties": {
+        "appName": { "type": "string" },
+        "htmlCode": { "type": "string" },
+        "isSimulation": { "type": "boolean" },
+        "messageToUser": { "type": "string" },
+        "createdAt": { "type": "number" }
+      },
+      "required": ["appName", "htmlCode", "isSimulation", "createdAt"]
+    }
+  },
+  "firestore": {
+    "/users/{userId}": {
+      "schema": {
+        "$ref": "#/entities/User"
+      },
+      "description": "Stores user profiles"
+    },
+    "/users/{userId}/transformations/{transformId}": {
+      "schema": {
+        "$ref": "#/entities/Transformation"
+      },
+      "description": "Stores saved app transformations for premium users"
+    }
+  }
+}
+
