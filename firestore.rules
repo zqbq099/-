@@ -81,6 +81,12 @@ service cloud.firestore {
     // Rules
     // ===============================================================
 
+    // Collection: mystique_apps_data/{appName}/data/{documentId}
+    // Used by generated apps for real-time features.
+    match /mystique_apps_data/{appName}/data/{documentId} {
+      allow read, write: if isAuthenticated();
+    }
+    
     match /users/{userId} {
       allow read: if isOwner(userId) || isAdmin();
       

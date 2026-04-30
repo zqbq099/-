@@ -3,21 +3,58 @@ import { motion, AnimatePresence, useDragControls } from 'motion/react';
 import { Send, X, Minimize2, Maximize2, Bot, User, Loader2, GripHorizontal, Undo2, AlertTriangle } from 'lucide-react';
 import ReactMarkdown from 'react-markdown';
 import remarkGfm from 'remark-gfm';
+import { collection, addDoc, onSnapshot, query, orderBy, serverTimestamp, Unsubscribe } from 'firebase/firestore';
 import { streamMessage, ChatMessage, AppTransformData } from '../lib/gemini';
 import { saveToHistory } from '../lib/history';
 import { cn } from '../lib/utils';
-import { auth } from '../firebase';
+import { auth, db } from '../firebase';
 
 interface FloatingChatProps {
   isPremium: boolean;
-  onAppSelect?: (app: AppTransformData) => void;
+  onAppSelect?: (app: AppTransformData | null) => void;
   externalApp?: AppTransformData | null;
+  customInstructions?: string;
 }
 
-export function FloatingChat({ isPremium, onAppSelect, externalApp }: FloatingChatProps) {
+const MystiqueEffect = () => (
+  <motion.div 
+    initial={{ opacity: 0 }}
+    animate={{ opacity: 1 }}
+    exit={{ opacity: 0 }}
+    transition={{ duration: 0.5 }}
+    className="fixed inset-0 bg-[#020617] z-[999999] flex justify-center items-center overflow-hidden"
+  >
+    <style>{`
+      @keyframes mq-morph {
+        0% { transform: rotate(0deg) scale(1); }
+        50% { transform: rotate(180deg) scale(1.2); }
+        100% { transform: rotate(360deg) scale(1); }
+      }
+      @keyframes mq-pulse {
+        0% { transform: scale(0.9); opacity: 0.8; }
+        100% { transform: scale(1.1); opacity: 1; }
+      }
+    `}</style>
+    <div className="absolute w-[200vw] h-[200vh] opacity-30" 
+         style={{
+           background: 'repeating-radial-gradient(circle at 50% 50%, transparent 0, #0ea5e9 2px, transparent 4px)',
+           backgroundSize: '60px 60px',
+           filter: 'drop-shadow(0 0 10px #38bdf8)',
+           animation: 'mq-morph 8s linear infinite'
+         }}></div>
+    <div className="absolute w-[150px] h-[150px] bg-[#0284c7] rounded-full"
+         style={{
+           boxShadow: '0 0 50px 20px #0ea5e9, inset 0 0 20px #e0f2fe',
+           animation: 'mq-pulse 1.5s ease-in-out infinite alternate'
+         }}></div>
+  </motion.div>
+);
+
+export function FloatingChat({ isPremium, onAppSelect, externalApp, customInstructions }: FloatingChatProps) {
   const [isOpen, setIsOpen] = useState(true);
   const [isMinimized, setIsMinimized] = useState(false);
   const [currentApp, setCurrentApp] = useState<AppTransformData | null>(null);
+  const [isTransforming, setIsTransforming] = useState(false);
   const [messages, setMessages] = useState<ChatMessage[]>([
     {
       id: '1',
@@ -29,15 +66,74 @@ export function FloatingChat({ isPremium, onAppSelect, externalApp }: FloatingCh
   const [isTyping, setIsTyping] = useState(false);
   const messagesEndRef = useRef<HTMLDivElement>(null);
   const inputRef = useRef<HTMLTextAreaElement>(null);
+  const iframeRef = useRef<HTMLIFrameElement>(null);
   const dragControls = useDragControls();
+  const activeListeners = useRef<{ [key: string]: Unsubscribe }>({});
 
   useEffect(() => {
-    if (externalApp) {
+    if (externalApp !== undefined) {
       setCurrentApp(externalApp);
-      setIsOpen(true);
-      setIsMinimized(false);
+      if (externalApp) {
+        setIsOpen(true);
+        setIsMinimized(false);
+      }
     }
   }, [externalApp]);
+
+  // Cleanup active listeners when app changes or closes
+  useEffect(() => {
+    return () => {
+      Object.values(activeListeners.current).forEach(unsubscribe => unsubscribe());
+      activeListeners.current = {};
+    };
+  }, [currentApp]);
+
+  // Handle messages from the iframe
+  useEffect(() => {
+    const handleMessage = async (event: MessageEvent) => {
+      if (!currentApp || !event.data || !event.data.type) return;
+
+      const { type, collection: subCollection, data } = event.data;
+      const appNameSafe = currentApp.appName.replace(/[^a-zA-Z0-9_-]/g, '_');
+      
+      // Base path: mystique_apps_data/{appName}/data
+      const dbPath = `mystique_apps_data/${appNameSafe}_${subCollection}/data`;
+
+      if (type === 'MYSTIQUE_SAVE') {
+        try {
+          await addDoc(collection(db, dbPath), {
+            ...data,
+            _serverTime: serverTimestamp()
+          });
+        } catch (error) {
+          console.error("Error saving data from iframe:", error);
+        }
+      } else if (type === 'MYSTIQUE_LISTEN') {
+        if (activeListeners.current[subCollection]) {
+          return; // Already listening
+        }
+
+        const q = query(collection(db, dbPath), orderBy('_serverTime', 'asc'));
+        const unsubscribe = onSnapshot(q, (snapshot) => {
+          const allData = snapshot.docs.map(doc => ({ id: doc.id, ...doc.data() }));
+          
+          // Send data back to iframe
+          if (iframeRef.current && iframeRef.current.contentWindow) {
+            iframeRef.current.contentWindow.postMessage({
+              type: 'MYSTIQUE_UPDATE',
+              collection: subCollection,
+              data: allData
+            }, '*');
+          }
+        });
+
+        activeListeners.current[subCollection] = unsubscribe;
+      }
+    };
+
+    window.addEventListener('message', handleMessage);
+    return () => window.removeEventListener('message', handleMessage);
+  }, [currentApp]);
 
   const scrollToBottom = () => {
     messagesEndRef.current?.scrollIntoView({ behavior: 'smooth' });
@@ -51,10 +147,17 @@ export function FloatingChat({ isPremium, onAppSelect, externalApp }: FloatingCh
     e?.preventDefault();
     if (!input.trim() || isTyping) return;
 
+    const userText = input.trim();
+    const isTransformIntent = /تحول|تطبيق|اصنع|لعبة|موقع|يوتيوب|واتساب|فيسبوك|تيك توك|انستجرام|سناب|تويتر|اكس|برنامج/i.test(userText);
+    
+    if (isTransformIntent) {
+      setIsTransforming(true);
+    }
+
     const userMessage: ChatMessage = {
       id: Date.now().toString(),
       role: 'user',
-      text: input.trim(),
+      text: userText,
     };
 
     setMessages(prev => [...prev, userMessage]);
@@ -69,7 +172,7 @@ export function FloatingChat({ isPremium, onAppSelect, externalApp }: FloatingCh
 
     try {
       const history = messages.filter(m => !m.error);
-      const stream = streamMessage(userMessage.text, history);
+      const stream = streamMessage(userMessage.text, history, customInstructions);
       
       let fullResponse = '';
       let transformData: AppTransformData | undefined;
@@ -83,6 +186,7 @@ export function FloatingChat({ isPremium, onAppSelect, externalApp }: FloatingCh
               : msg
           ));
         } else if (chunk.type === 'transform') {
+          setIsTransforming(true);
           transformData = chunk.data;
           if (!fullResponse.trim() && transformData.messageToUser) {
             fullResponse = transformData.messageToUser;
@@ -117,6 +221,7 @@ export function FloatingChat({ isPremium, onAppSelect, externalApp }: FloatingCh
     } finally {
       setIsTyping(false);
       inputRef.current?.focus();
+      setTimeout(() => setIsTransforming(false), 800);
     }
   };
 
@@ -143,191 +248,198 @@ export function FloatingChat({ isPremium, onAppSelect, externalApp }: FloatingCh
   }
 
   return (
-    <motion.div
-      drag
-      dragControls={dragControls}
-      dragListener={false}
-      dragMomentum={false}
-      dragElastic={0.1}
-      initial={{ opacity: 0, y: 20, scale: 0.95 }}
-      animate={{ opacity: 1, y: 0, scale: 1 }}
-      exit={{ opacity: 0, y: 20, scale: 0.95 }}
-      className={cn(
-        "fixed z-50 flex flex-col bg-white dark:bg-gray-900 rounded-2xl shadow-2xl overflow-hidden border border-gray-200 dark:border-gray-800",
-        isMinimized ? "w-80 h-16" : "w-[90vw] sm:w-[400px] md:w-[450px] h-[80vh] max-h-[800px]",
-        "bottom-6 right-6 sm:bottom-auto sm:right-auto sm:top-20 sm:left-20"
-      )}
-    >
-      {/* Header (Draggable Area) */}
-      <div 
-        onPointerDown={(e) => dragControls.start(e)}
-        className="flex items-center justify-between px-4 py-3 bg-gray-50 dark:bg-gray-800 border-b border-gray-200 dark:border-gray-700 cursor-move"
-      >
-        <div className="flex items-center gap-3 pointer-events-none">
-          <div className="w-8 h-8 rounded-full bg-blue-100 dark:bg-blue-900/50 flex items-center justify-center text-blue-600 dark:text-blue-400">
-            <Bot size={20} />
-          </div>
-          <div>
-            <h3 className="font-semibold text-gray-800 dark:text-gray-100 text-sm">المتحول</h3>
-            <p className="text-xs text-green-600 dark:text-green-400 flex items-center gap-1">
-              <span className="w-1.5 h-1.5 rounded-full bg-green-500"></span>
-              متصل
-            </p>
-          </div>
-        </div>
-        <div className="flex items-center gap-1 text-gray-500 dark:text-gray-400">
-          <GripHorizontal size={16} className="mr-2 opacity-50 pointer-events-none" />
-          <button 
-            onPointerDown={(e) => e.stopPropagation()}
-            onClick={() => setIsMinimized(!isMinimized)}
-            className="p-1.5 hover:bg-gray-200 dark:hover:bg-gray-700 rounded-md transition-colors"
-          >
-            {isMinimized ? <Maximize2 size={16} /> : <Minimize2 size={16} />}
-          </button>
-          <button 
-            onPointerDown={(e) => e.stopPropagation()}
-            onClick={() => setIsOpen(false)}
-            className="p-1.5 hover:bg-red-100 hover:text-red-600 dark:hover:bg-red-900/30 dark:hover:text-red-400 rounded-md transition-colors"
-          >
-            <X size={16} />
-          </button>
-        </div>
-      </div>
+    <>
+      <AnimatePresence>
+        {isTransforming && <MystiqueEffect />}
+      </AnimatePresence>
 
-      <AnimatePresence mode="wait">
-        {!isMinimized && !currentApp && (
+      <AnimatePresence>
+        {currentApp && (
           <motion.div 
-            key="chat"
-            initial={{ opacity: 0, height: 0 }}
-            animate={{ opacity: 1, height: 'auto' }}
-            exit={{ opacity: 0, height: 0 }}
-            className="flex flex-col flex-1 overflow-hidden"
+            key="fullscreen-app"
+            initial={{ opacity: 0 }}
+            animate={{ opacity: 1 }}
+            exit={{ opacity: 0 }}
+            className="fixed inset-0 z-[100] bg-white dark:bg-gray-900 flex flex-col"
           >
-            {/* Messages */}
-            <div className="flex-1 overflow-y-auto p-4 space-y-6 bg-gray-50/50 dark:bg-gray-900/50" dir="rtl">
-              {messages.map((msg) => (
-                <div 
-                  key={msg.id} 
-                  className={cn(
-                    "flex gap-3 max-w-[85%]",
-                    msg.role === 'user' ? "mr-auto flex-row-reverse" : "ml-auto"
-                  )}
-                >
-                  <div className={cn(
-                    "flex-shrink-0 w-8 h-8 rounded-full flex items-center justify-center mt-1",
-                    msg.role === 'user' 
-                      ? "bg-gray-200 dark:bg-gray-700 text-gray-600 dark:text-gray-300" 
-                      : "bg-blue-100 dark:bg-blue-900/50 text-blue-600 dark:text-blue-400"
-                  )}>
-                    {msg.role === 'user' ? <User size={16} /> : <Bot size={16} />}
-                  </div>
-                  <div className={cn(
-                    "px-4 py-3 rounded-2xl text-sm leading-relaxed",
-                    msg.role === 'user' 
-                      ? "bg-blue-600 text-white rounded-tl-sm" 
-                      : "bg-white dark:bg-gray-800 text-gray-800 dark:text-gray-200 rounded-tr-sm shadow-sm border border-gray-100 dark:border-gray-700",
-                    msg.error && "bg-red-50 dark:bg-red-900/20 text-red-600 dark:text-red-400 border-red-200 dark:border-red-800"
-                  )}>
-                    {msg.role === 'model' ? (
-                      <div className="markdown-body prose prose-sm dark:prose-invert max-w-none">
-                        {msg.text ? (
-                          <ReactMarkdown remarkPlugins={[remarkGfm]}>
-                            {msg.text}
-                          </ReactMarkdown>
-                        ) : (
-                          <div className="flex items-center gap-1 h-5">
-                            <span className="w-1.5 h-1.5 bg-gray-400 rounded-full animate-bounce" style={{ animationDelay: '0ms' }}></span>
-                            <span className="w-1.5 h-1.5 bg-gray-400 rounded-full animate-bounce" style={{ animationDelay: '150ms' }}></span>
-                            <span className="w-1.5 h-1.5 bg-gray-400 rounded-full animate-bounce" style={{ animationDelay: '300ms' }}></span>
-                          </div>
-                        )}
-                      </div>
-                    ) : (
-                      <p className="whitespace-pre-wrap">{msg.text}</p>
-                    )}
-                  </div>
-                </div>
-              ))}
-              <div ref={messagesEndRef} />
-            </div>
-
-            {/* Input Area */}
-            <div className="p-3 bg-white dark:bg-gray-900 border-t border-gray-200 dark:border-gray-800" dir="rtl">
-              <form 
-                onSubmit={handleSubmit}
-                className="relative flex items-end gap-2 bg-gray-100 dark:bg-gray-800 rounded-2xl p-1 border border-transparent focus-within:border-blue-500/50 focus-within:ring-2 focus-within:ring-blue-500/20 transition-all"
+            {/* Back Button Overlay */}
+            <div className="absolute top-4 left-4 z-[110]">
+              <button 
+                onClick={() => {
+                  setCurrentApp(null);
+                  if (onAppSelect) onAppSelect(null);
+                }}
+                className="flex items-center gap-2 bg-black/50 hover:bg-black/70 backdrop-blur-md text-white px-4 py-2 rounded-full transition-all shadow-lg"
               >
-                <textarea
-                  ref={inputRef}
-                  value={input}
-                  onChange={(e) => setInput(e.target.value)}
-                  onKeyDown={handleKeyDown}
-                  placeholder="اسأل المتحول..."
-                  className="w-full max-h-32 min-h-[44px] bg-transparent border-none focus:ring-0 resize-none py-3 px-4 text-sm text-gray-800 dark:text-gray-200 placeholder-gray-500"
-                  rows={1}
-                  dir="auto"
-                />
-                <button
-                  type="submit"
-                  disabled={!input.trim() || isTyping}
-                  className="flex-shrink-0 w-10 h-10 mb-0.5 ml-0.5 rounded-xl bg-blue-600 text-white flex items-center justify-center disabled:opacity-50 disabled:bg-gray-400 transition-colors hover:bg-blue-700"
-                >
-                  {isTyping ? <Loader2 size={18} className="animate-spin" /> : <Send size={18} className="mr-1" />}
-                </button>
-              </form>
-              <div className="text-center mt-2">
-                <span className="text-[10px] text-gray-400 dark:text-gray-500">
-                  المتحول يمكن أن يخطئ. يرجى التحقق من المعلومات المهمة.
-                </span>
-              </div>
-            </div>
-          </motion.div>
-        )}
-
-        {!isMinimized && currentApp && (
-          <motion.div 
-            key="app"
-            initial={{ opacity: 0, scale: 0.95 }}
-            animate={{ opacity: 1, scale: 1 }}
-            exit={{ opacity: 0, scale: 0.95 }}
-            className="flex flex-col flex-1 overflow-hidden bg-white dark:bg-gray-900"
-          >
-            {/* App Header Bar */}
-            <div className="flex items-center justify-between px-3 py-2 bg-blue-50 dark:bg-blue-900/20 border-b border-blue-100 dark:border-blue-800" dir="rtl">
-              <div className="flex items-center gap-2">
-                <button 
-                  onClick={() => {
-                    setCurrentApp(null);
-                    if (onAppSelect) onAppSelect(null as any);
-                  }}
-                  className="flex items-center gap-1.5 text-sm text-blue-600 dark:text-blue-400 hover:text-blue-700 font-medium px-2 py-1 rounded-md hover:bg-blue-100 dark:hover:bg-blue-800/50 transition-colors"
-                >
-                  <Undo2 size={16} />
-                  العودة للدردشة
-                </button>
-              </div>
-              <span className="font-semibold text-sm text-gray-700 dark:text-gray-200">{currentApp.appName}</span>
+                <Undo2 size={18} />
+                العودة للمتحول
+              </button>
             </div>
 
             {currentApp.isSimulation && (
-              <div className="bg-red-500 text-white text-xs text-center py-1.5 font-medium flex items-center justify-center gap-1.5 shadow-inner" dir="rtl">
+              <div className="absolute top-0 left-0 right-0 bg-red-500/90 backdrop-blur-sm text-white text-xs text-center py-1.5 font-medium flex items-center justify-center gap-1.5 shadow-md z-[105]" dir="rtl">
                 <AlertTriangle size={14} />
                 تنبيه: هذه واجهة محاكاة افتراضية للشكل فقط
               </div>
             )}
 
-            <div className="flex-1 overflow-hidden relative bg-white">
+            <div className="flex-1 w-full h-full bg-white">
               <iframe 
+                ref={iframeRef}
                 srcDoc={currentApp.htmlCode}
-                className="w-full h-full border-none absolute inset-0"
-                sandbox="allow-scripts allow-same-origin allow-forms allow-modals"
+                className="w-full h-full border-none"
+                sandbox="allow-scripts allow-same-origin allow-forms allow-modals allow-top-navigation allow-popups"
                 title={currentApp.appName}
               />
             </div>
           </motion.div>
         )}
       </AnimatePresence>
-    </motion.div>
+
+      <motion.div
+        drag
+        dragControls={dragControls}
+        dragListener={false}
+        dragMomentum={false}
+        dragElastic={0.1}
+        initial={{ opacity: 0, y: 20, scale: 0.95 }}
+        animate={{ opacity: 1, y: 0, scale: 1 }}
+        exit={{ opacity: 0, y: 20, scale: 0.95 }}
+        className={cn(
+          "fixed z-50 flex flex-col bg-white dark:bg-gray-900 rounded-2xl shadow-2xl overflow-hidden border border-gray-200 dark:border-gray-800",
+          isMinimized ? "w-80 h-16" : "w-[90vw] sm:w-[400px] md:w-[450px] h-[80vh] max-h-[800px]",
+          "bottom-6 right-6 sm:bottom-auto sm:right-auto sm:top-20 sm:left-20",
+          currentApp ? "hidden" : "" // Hide chat when app is fullscreen
+        )}
+      >
+        {/* Header (Draggable Area) */}
+        <div 
+          onPointerDown={(e) => dragControls.start(e)}
+          className="flex items-center justify-between px-4 py-3 bg-gray-50 dark:bg-gray-800 border-b border-gray-200 dark:border-gray-700 cursor-move"
+        >
+          <div className="flex items-center gap-3 pointer-events-none">
+            <div className="w-8 h-8 rounded-full bg-blue-100 dark:bg-blue-900/50 flex items-center justify-center text-blue-600 dark:text-blue-400">
+              <Bot size={20} />
+            </div>
+            <div>
+              <h3 className="font-semibold text-gray-800 dark:text-gray-100 text-sm">المتحول</h3>
+              <p className="text-xs text-green-600 dark:text-green-400 flex items-center gap-1">
+                <span className="w-1.5 h-1.5 rounded-full bg-green-500"></span>
+                متصل
+              </p>
+            </div>
+          </div>
+          <div className="flex items-center gap-1 text-gray-500 dark:text-gray-400">
+            <GripHorizontal size={16} className="mr-2 opacity-50 pointer-events-none" />
+            <button 
+              onPointerDown={(e) => e.stopPropagation()}
+              onClick={() => setIsMinimized(!isMinimized)}
+              className="p-1.5 hover:bg-gray-200 dark:hover:bg-gray-700 rounded-md transition-colors"
+            >
+              {isMinimized ? <Maximize2 size={16} /> : <Minimize2 size={16} />}
+            </button>
+            <button 
+              onPointerDown={(e) => e.stopPropagation()}
+              onClick={() => setIsOpen(false)}
+              className="p-1.5 hover:bg-red-100 hover:text-red-600 dark:hover:bg-red-900/30 dark:hover:text-red-400 rounded-md transition-colors"
+            >
+              <X size={16} />
+            </button>
+          </div>
+        </div>
+
+        <AnimatePresence mode="wait">
+          {!isMinimized && (
+            <motion.div 
+              key="chat"
+              initial={{ opacity: 0, height: 0 }}
+              animate={{ opacity: 1, height: 'auto' }}
+              exit={{ opacity: 0, height: 0 }}
+              className="flex flex-col flex-1 overflow-hidden"
+            >
+              {/* Messages */}
+              <div className="flex-1 overflow-y-auto p-4 space-y-6 bg-gray-50/50 dark:bg-gray-900/50" dir="rtl">
+                {messages.map((msg) => (
+                  <div 
+                    key={msg.id} 
+                    className={cn(
+                      "flex gap-3 max-w-[85%]",
+                      msg.role === 'user' ? "mr-auto flex-row-reverse" : "ml-auto"
+                    )}
+                  >
+                    <div className={cn(
+                      "flex-shrink-0 w-8 h-8 rounded-full flex items-center justify-center mt-1",
+                      msg.role === 'user' 
+                        ? "bg-gray-200 dark:bg-gray-700 text-gray-600 dark:text-gray-300" 
+                        : "bg-blue-100 dark:bg-blue-900/50 text-blue-600 dark:text-blue-400"
+                    )}>
+                      {msg.role === 'user' ? <User size={16} /> : <Bot size={16} />}
+                    </div>
+                    <div className={cn(
+                      "px-4 py-3 rounded-2xl text-sm leading-relaxed",
+                      msg.role === 'user' 
+                        ? "bg-blue-600 text-white rounded-tl-sm" 
+                        : "bg-white dark:bg-gray-800 text-gray-800 dark:text-gray-200 rounded-tr-sm shadow-sm border border-gray-100 dark:border-gray-700",
+                      msg.error && "bg-red-50 dark:bg-red-900/20 text-red-600 dark:text-red-400 border-red-200 dark:border-red-800"
+                    )}>
+                      {msg.role === 'model' ? (
+                        <div className="markdown-body prose prose-sm dark:prose-invert max-w-none">
+                          {msg.text ? (
+                            <ReactMarkdown remarkPlugins={[remarkGfm]}>
+                              {msg.text}
+                            </ReactMarkdown>
+                          ) : (
+                            <div className="flex items-center gap-1 h-5">
+                              <span className="w-1.5 h-1.5 bg-gray-400 rounded-full animate-bounce" style={{ animationDelay: '0ms' }}></span>
+                              <span className="w-1.5 h-1.5 bg-gray-400 rounded-full animate-bounce" style={{ animationDelay: '150ms' }}></span>
+                              <span className="w-1.5 h-1.5 bg-gray-400 rounded-full animate-bounce" style={{ animationDelay: '300ms' }}></span>
+                            </div>
+                          )}
+                        </div>
+                      ) : (
+                        <p className="whitespace-pre-wrap">{msg.text}</p>
+                      )}
+                    </div>
+                  </div>
+                ))}
+                <div ref={messagesEndRef} />
+              </div>
+
+              {/* Input Area */}
+              <div className="p-3 bg-white dark:bg-gray-900 border-t border-gray-200 dark:border-gray-800" dir="rtl">
+                <form 
+                  onSubmit={handleSubmit}
+                  className="relative flex items-end gap-2 bg-gray-100 dark:bg-gray-800 rounded-2xl p-1 border border-transparent focus-within:border-blue-500/50 focus-within:ring-2 focus-within:ring-blue-500/20 transition-all"
+                >
+                  <textarea
+                    ref={inputRef}
+                    value={input}
+                    onChange={(e) => setInput(e.target.value)}
+                    onKeyDown={handleKeyDown}
+                    placeholder="اسأل المتحول..."
+                    className="w-full max-h-32 min-h-[44px] bg-transparent border-none focus:ring-0 resize-none py-3 px-4 text-sm text-gray-800 dark:text-gray-200 placeholder-gray-500"
+                    rows={1}
+                    dir="auto"
+                  />
+                  <button
+                    type="submit"
+                    disabled={!input.trim() || isTyping}
+                    className="flex-shrink-0 w-10 h-10 mb-0.5 ml-0.5 rounded-xl bg-blue-600 text-white flex items-center justify-center disabled:opacity-50 disabled:bg-gray-400 transition-colors hover:bg-blue-700"
+                  >
+                    {isTyping ? <Loader2 size={18} className="animate-spin" /> : <Send size={18} className="mr-1" />}
+                  </button>
+                </form>
+                <div className="text-center mt-2">
+                  <span className="text-[10px] text-gray-400 dark:text-gray-500">
+                    المتحول يمكن أن يخطئ. يرجى التحقق من المعلومات المهمة.
+                  </span>
+                </div>
+              </div>
+            </motion.div>
+          )}
+        </AnimatePresence>
+      </motion.div>
+    </>
   );
 }
 
