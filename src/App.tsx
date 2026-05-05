@@ -3,7 +3,7 @@ import { FloatingChat } from './components/FloatingChat';
 import { auth, loginWithGoogle, loginAsGuest, logout, db } from './firebase';
 import { onAuthStateChanged, User } from 'firebase/auth';
 import { doc, getDoc, setDoc } from 'firebase/firestore';
-import { Loader2, LogIn, UserCircle, LogOut, History, Trash2, Crown, Terminal, X, Save } from 'lucide-react';
+import { Loader2, LogIn, UserCircle, LogOut, History, Trash2, Crown, Terminal, X, Save, Settings } from 'lucide-react';
 import { getHistory, SavedApp, deleteFromHistory } from './lib/history';
 import { AppTransformData } from './lib/gemini';
 
@@ -20,6 +20,11 @@ export default function App() {
   const [showCommandPanel, setShowCommandPanel] = useState(false);
   const [customInstructions, setCustomInstructions] = useState(localStorage.getItem('mystique_custom_instructions') || '');
   const [tempInstructions, setTempInstructions] = useState(customInstructions);
+
+  // Settings State
+  const [showSettings, setShowSettings] = useState(false);
+  const [tempGeminiKey, setTempGeminiKey] = useState(localStorage.getItem('mystique_gemini_key') || '');
+  const [tempFirebaseConfig, setTempFirebaseConfig] = useState(localStorage.getItem('mystique_firebase_config') || '');
 
   useEffect(() => {
     const unsubscribe = onAuthStateChanged(auth, async (currentUser) => {
@@ -38,8 +43,11 @@ export default function App() {
             });
             setIsPremium(false);
           }
-        } catch (error) {
+        } catch (error: any) {
           console.error("Error fetching user data:", error);
+          if (error.code === 'unavailable' || error.message?.includes('reach Cloud Firestore')) {
+            console.warn("تلميح: يبدو أن قاعدة البيانات غبر متصلة أو لم يتم إعدادها في Firebase بعد. التطبيق سيعمل بالوضع المحلي مؤقتاً.");
+          }
         }
       } else {
         setIsPremium(false);
@@ -101,6 +109,26 @@ export default function App() {
     localStorage.setItem('mystique_custom_instructions', tempInstructions);
     setCustomInstructions(tempInstructions);
     setShowCommandPanel(false);
+  };
+
+  const saveSettings = () => {
+    if (tempGeminiKey) localStorage.setItem('mystique_gemini_key', tempGeminiKey);
+    else localStorage.removeItem('mystique_gemini_key');
+
+    if (tempFirebaseConfig) {
+      try {
+        JSON.parse(tempFirebaseConfig);
+        localStorage.setItem('mystique_firebase_config', tempFirebaseConfig);
+      } catch (e) {
+        alert("إعدادات Firebase غير صحيحة (تأكد من كونها بصيغة JSON صحيحة).");
+        return;
+      }
+    } else {
+      localStorage.removeItem('mystique_firebase_config');
+    }
+    
+    setShowSettings(false);
+    window.location.reload(); // Reload to apply changes
   };
 
   if (loading) {
@@ -173,6 +201,19 @@ export default function App() {
           <h1 className="text-xl font-bold text-blue-600 dark:text-blue-400">المتحول</h1>
         </div>
         <div className="flex items-center gap-4">
+          <button 
+            onClick={() => {
+              setTempGeminiKey(localStorage.getItem('mystique_gemini_key') || '');
+              setTempFirebaseConfig(localStorage.getItem('mystique_firebase_config') || '');
+              setShowSettings(true);
+            }}
+            className="flex items-center gap-2 px-3 py-2 rounded-lg transition-colors hover:bg-gray-100 dark:hover:bg-gray-800 text-gray-600 dark:text-gray-300"
+            title="الإعدادات المتقدمة"
+          >
+            <Settings size={18} className="text-gray-600 dark:text-gray-400" />
+            <span className="hidden sm:inline text-sm font-medium">الإعدادات</span>
+          </button>
+
           <button 
             onClick={() => {
               setTempInstructions(customInstructions);
@@ -291,7 +332,6 @@ export default function App() {
         )}
       </main>
 
-      {/* Command Panel Modal */}
       {showCommandPanel && (
         <div className="fixed inset-0 bg-black/60 backdrop-blur-sm z-[9999] flex items-center justify-center p-4" dir="rtl">
           <div className="bg-white dark:bg-gray-900 rounded-3xl shadow-2xl w-full max-w-2xl overflow-hidden border border-gray-200 dark:border-gray-800 flex flex-col max-h-[90vh]">
@@ -344,6 +384,94 @@ export default function App() {
               >
                 <Save size={16} />
                 حفظ الأوامر
+              </button>
+            </div>
+          </div>
+        </div>
+      )}
+
+      {/* Settings Modal */}
+      {showSettings && (
+        <div className="fixed inset-0 bg-black/60 backdrop-blur-sm z-[9999] flex items-center justify-center p-4" dir="rtl">
+          <div className="bg-white dark:bg-gray-900 rounded-3xl shadow-2xl w-full max-w-2xl overflow-hidden border border-gray-200 dark:border-gray-800 flex flex-col max-h-[90vh]">
+            <div className="px-6 py-4 border-b border-gray-200 dark:border-gray-800 flex items-center justify-between bg-gray-50 dark:bg-gray-800/50">
+              <div className="flex items-center gap-3">
+                <div className="w-10 h-10 rounded-xl bg-gray-100 dark:bg-gray-800 flex items-center justify-center text-gray-600 dark:text-gray-400">
+                  <Settings size={20} />
+                </div>
+                <div>
+                  <h2 className="text-lg font-bold text-gray-900 dark:text-white">إعدادات النظام والبيئة</h2>
+                  <p className="text-xs text-gray-500 dark:text-gray-400">إدارة مفاتيح API وبيانات الاستضافة اللامركزية</p>
+                </div>
+              </div>
+              <button 
+                onClick={() => setShowSettings(false)}
+                className="p-2 text-gray-400 hover:text-gray-600 dark:hover:text-gray-200 hover:bg-gray-200 dark:hover:bg-gray-700 rounded-lg transition-colors"
+              >
+                <X size={20} />
+              </button>
+            </div>
+            
+            <div className="p-6 flex-1 overflow-y-auto space-y-6">
+              <div className="bg-blue-50 dark:bg-blue-900/20 text-blue-800 dark:text-blue-300 p-4 rounded-xl text-sm leading-relaxed">
+                <p className="font-bold mb-1">المتحول المستقل - Offline PWA 🚀</p>
+                <p>يمكنك استضافة المتحول بنفسك وتشغيله كـ تطبيق متكامل. لحماية بياناتك، أدخل مفاتيحك الخاصة لتظل مخزنة محلياً في جهازك ولن تشارك مع أي خادم آخر.</p>
+              </div>
+
+              <div>
+                <label className="block text-sm font-medium text-gray-700 dark:text-gray-300 mb-1">
+                  مفتاح Gemini API (مطلوب)
+                </label>
+                <p className="text-xs text-gray-500 dark:text-gray-400 mb-2">
+                  احصل عليه مجاناً من <a href="https://aistudio.google.com/app/apikey" target="_blank" rel="noreferrer" className="text-blue-500 underline">Google AI Studio</a>
+                </p>
+                <input
+                  type="password"
+                  value={tempGeminiKey}
+                  onChange={(e) => setTempGeminiKey(e.target.value)}
+                  placeholder="AIzaSy..."
+                  className="w-full p-3 bg-gray-50 dark:bg-gray-950 border border-gray-200 dark:border-gray-800 rounded-xl text-sm text-gray-800 dark:text-gray-200 focus:ring-2 focus:ring-blue-500 focus:border-transparent font-mono"
+                  dir="ltr"
+                />
+              </div>
+
+              <div>
+                <label className="block text-sm font-medium text-gray-700 dark:text-gray-300 mb-1">
+                  إعدادات Firebase (اختياري لتخزين البيانات)
+                </label>
+                <p className="text-xs text-gray-500 dark:text-gray-400 mb-2">
+                  قم بإنشاء مشروع في <a href="https://console.firebase.google.com/" target="_blank" rel="noreferrer" className="text-blue-500 underline">Firebase</a>، انسخ الـ config (بصيغة JSON) والصقه هنا لتخزين سجلاتك وتطبيقاتك في قاعدة بياناتك الخاصة.
+                </p>
+                <textarea
+                  value={tempFirebaseConfig}
+                  onChange={(e) => setTempFirebaseConfig(e.target.value)}
+                  placeholder='{
+  "apiKey": "...",
+  "authDomain": "...",
+  "projectId": "...",
+  "storageBucket": "...",
+  "messagingSenderId": "...",
+  "appId": "..."
+}'
+                  className="w-full h-48 p-4 bg-gray-50 dark:bg-gray-950 border border-gray-200 dark:border-gray-800 rounded-xl text-sm font-mono text-gray-800 dark:text-gray-200 focus:ring-2 focus:ring-blue-500 focus:border-transparent resize-none"
+                  dir="ltr"
+                />
+              </div>
+            </div>
+
+            <div className="px-6 py-4 border-t border-gray-200 dark:border-gray-800 bg-gray-50 dark:bg-gray-800/50 flex justify-end gap-3">
+              <button
+                onClick={() => setShowSettings(false)}
+                className="px-4 py-2 text-sm font-medium text-gray-600 dark:text-gray-300 hover:bg-gray-200 dark:hover:bg-gray-700 rounded-lg transition-colors"
+              >
+                إلغاء
+              </button>
+              <button
+                onClick={saveSettings}
+                className="flex items-center gap-2 px-6 py-2 bg-blue-600 hover:bg-blue-700 text-white text-sm font-medium rounded-lg transition-colors shadow-md shadow-blue-500/20"
+              >
+                <Save size={16} />
+                حفظ وإعادة تشغيل
               </button>
             </div>
           </div>

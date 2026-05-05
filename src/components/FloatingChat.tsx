@@ -16,13 +16,13 @@ interface FloatingChatProps {
   customInstructions?: string;
 }
 
-const MystiqueEffect = () => (
+const MystiqueEffect = ({ progress }: { progress: number }) => (
   <motion.div 
     initial={{ opacity: 0 }}
     animate={{ opacity: 1 }}
     exit={{ opacity: 0 }}
     transition={{ duration: 0.5 }}
-    className="fixed inset-0 bg-[#020617] z-[999999] flex justify-center items-center overflow-hidden"
+    className="fixed inset-0 bg-[#020617] z-[999999] flex flex-col justify-center items-center overflow-hidden"
   >
     <style>{`
       @keyframes mq-morph {
@@ -42,11 +42,23 @@ const MystiqueEffect = () => (
            filter: 'drop-shadow(0 0 10px #38bdf8)',
            animation: 'mq-morph 8s linear infinite'
          }}></div>
-    <div className="absolute w-[150px] h-[150px] bg-[#0284c7] rounded-full"
+    <div className="relative w-[150px] h-[150px] bg-[#0284c7] rounded-full mb-12"
          style={{
            boxShadow: '0 0 50px 20px #0ea5e9, inset 0 0 20px #e0f2fe',
            animation: 'mq-pulse 1.5s ease-in-out infinite alternate'
          }}></div>
+    
+    <div className="relative z-10 w-full max-w-md px-6 flex flex-col items-center">
+      <div className="text-white font-bold text-xl mb-4 tracking-widest" dir="rtl">جاري التحول...</div>
+      <div className="w-full h-2 bg-white/10 rounded-full overflow-hidden backdrop-blur-md border border-white/5 shadow-2xl">
+        <motion.div 
+          initial={{ width: '0%' }}
+          animate={{ width: `${progress}%` }}
+          className="h-full bg-gradient-to-r from-blue-500 to-cyan-400 shadow-[0_0_15px_#0ea5e9]"
+        />
+      </div>
+      <div className="text-blue-300 text-xs mt-2 font-mono">{Math.round(progress)}%</div>
+    </div>
   </motion.div>
 );
 
@@ -55,6 +67,8 @@ export function FloatingChat({ isPremium, onAppSelect, externalApp, customInstru
   const [isMinimized, setIsMinimized] = useState(false);
   const [currentApp, setCurrentApp] = useState<AppTransformData | null>(null);
   const [isTransforming, setIsTransforming] = useState(false);
+  const [transformProgress, setTransformProgress] = useState(0);
+  const [isEditChatOpen, setIsEditChatOpen] = useState(false);
   const [messages, setMessages] = useState<ChatMessage[]>([
     {
       id: '1',
@@ -152,6 +166,7 @@ export function FloatingChat({ isPremium, onAppSelect, externalApp, customInstru
     
     if (isTransformIntent) {
       setIsTransforming(true);
+      setTransformProgress(0);
     }
 
     const userMessage: ChatMessage = {
@@ -176,8 +191,13 @@ export function FloatingChat({ isPremium, onAppSelect, externalApp, customInstru
       
       let fullResponse = '';
       let transformData: AppTransformData | undefined;
+      let chunkCount = 0;
 
       for await (const chunk of stream) {
+        chunkCount++;
+        // Simulate progress based on chunks received (capped at 95 until finished)
+        setTransformProgress(prev => Math.min(95, prev + (100 / (chunkCount + 20))));
+
         if (chunk.type === 'text') {
           fullResponse += chunk.text;
           setMessages(prev => prev.map(msg => 
@@ -204,6 +224,7 @@ export function FloatingChat({ isPremium, onAppSelect, externalApp, customInstru
           // Save to history
           const userId = auth.currentUser?.uid || '';
           await saveToHistory(userId, isPremium, transformData);
+          setTransformProgress(100);
         }
       }
       
@@ -221,7 +242,11 @@ export function FloatingChat({ isPremium, onAppSelect, externalApp, customInstru
     } finally {
       setIsTyping(false);
       inputRef.current?.focus();
-      setTimeout(() => setIsTransforming(false), 800);
+      setTimeout(() => {
+        setIsTransforming(false);
+        setTransformProgress(0);
+        setIsEditChatOpen(false);
+      }, 800);
     }
   };
 
@@ -250,7 +275,7 @@ export function FloatingChat({ isPremium, onAppSelect, externalApp, customInstru
   return (
     <>
       <AnimatePresence>
-        {isTransforming && <MystiqueEffect />}
+        {isTransforming && <MystiqueEffect progress={transformProgress} />}
       </AnimatePresence>
 
       <AnimatePresence>
@@ -263,16 +288,29 @@ export function FloatingChat({ isPremium, onAppSelect, externalApp, customInstru
             className="fixed inset-0 z-[100] bg-white dark:bg-gray-900 flex flex-col"
           >
             {/* Back Button Overlay */}
-            <div className="absolute top-4 left-4 z-[110]">
+            <div className="absolute top-4 left-4 z-[110] flex items-center gap-3">
               <button 
                 onClick={() => {
                   setCurrentApp(null);
                   if (onAppSelect) onAppSelect(null);
+                  setIsEditChatOpen(false);
                 }}
-                className="flex items-center gap-2 bg-black/50 hover:bg-black/70 backdrop-blur-md text-white px-4 py-2 rounded-full transition-all shadow-lg"
+                className="flex items-center gap-2 bg-black/50 hover:bg-black/70 backdrop-blur-md text-white px-4 py-2 rounded-full transition-all shadow-lg border border-white/10"
               >
                 <Undo2 size={18} />
-                العودة للمتحول
+                <span className="hidden sm:inline">العودة للمتحول</span>
+              </button>
+
+              <button 
+                onClick={() => setIsEditChatOpen(!isEditChatOpen)}
+                className={cn(
+                  "flex items-center gap-2 backdrop-blur-md text-white px-4 py-2 rounded-full transition-all shadow-lg border border-white/10",
+                  isEditChatOpen ? "bg-blue-600/80" : "bg-black/50 hover:bg-black/70"
+                )}
+                title="تعديل التطبيق"
+              >
+                <Send size={18} />
+                <span className="hidden sm:inline">دردشة التعديل</span>
               </button>
             </div>
 
@@ -288,7 +326,7 @@ export function FloatingChat({ isPremium, onAppSelect, externalApp, customInstru
                 ref={iframeRef}
                 srcDoc={currentApp.htmlCode}
                 className="w-full h-full border-none"
-                sandbox="allow-scripts allow-same-origin allow-forms allow-modals allow-top-navigation allow-popups"
+                sandbox="allow-scripts allow-forms allow-modals allow-top-navigation allow-popups"
                 title={currentApp.appName}
               />
             </div>
@@ -308,8 +346,9 @@ export function FloatingChat({ isPremium, onAppSelect, externalApp, customInstru
         className={cn(
           "fixed z-50 flex flex-col bg-white dark:bg-gray-900 rounded-2xl shadow-2xl overflow-hidden border border-gray-200 dark:border-gray-800",
           isMinimized ? "w-80 h-16" : "w-[90vw] sm:w-[400px] md:w-[450px] h-[80vh] max-h-[800px]",
-          "bottom-6 right-6 sm:bottom-auto sm:right-auto sm:top-20 sm:left-20",
-          currentApp ? "hidden" : "" // Hide chat when app is fullscreen
+          "bottom-6 right-1/2 translate-x-1/2 sm:translate-x-0 sm:bottom-auto sm:right-auto sm:top-20 sm:left-20",
+          (currentApp && !isEditChatOpen) ? "hidden" : "",
+          (currentApp && isEditChatOpen) ? "z-[1000] border-blue-500/50 shadow-blue-500/20" : ""
         )}
       >
         {/* Header (Draggable Area) */}

@@ -20,8 +20,10 @@ export const saveToHistory = async (userId: string, isPremium: boolean, appData:
     // Save to Firestore
     try {
       await addDoc(collection(db, `users/${userId}/transformations`), savedApp);
-    } catch (error) {
-      console.error("Error saving to Firestore", error);
+    } catch (error: any) {
+      if (error?.code !== 'unavailable') {
+        console.error("Error saving to Firestore", error);
+      }
       // Fallback to local storage if firestore fails
       saveToLocalStorage(userId, savedApp);
     }
@@ -44,8 +46,10 @@ export const getHistory = async (userId: string, isPremium: boolean): Promise<Sa
       const q = query(collection(db, `users/${userId}/transformations`), orderBy('createdAt', 'desc'));
       const snapshot = await getDocs(q);
       return snapshot.docs.map(doc => ({ id: doc.id, ...doc.data() } as SavedApp));
-    } catch (error) {
-      console.error("Error fetching from Firestore", error);
+    } catch (error: any) {
+      if (error?.code !== 'unavailable') {
+        console.error("Error fetching from Firestore", error);
+      }
       return getFromLocalStorage(userId);
     }
   } else {
@@ -63,8 +67,10 @@ export const deleteFromHistory = async (userId: string, isPremium: boolean, appI
   if (isPremium && userId) {
     try {
       await deleteDoc(doc(db, `users/${userId}/transformations`, appId));
-    } catch (error) {
-      console.error("Error deleting from Firestore", error);
+    } catch (error: any) {
+      if (error?.code !== 'unavailable') {
+        console.error("Error deleting from Firestore", error);
+      }
       deleteFromLocalStorage(userId, appId);
     }
   } else {

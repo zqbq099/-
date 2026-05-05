@@ -1,11 +1,28 @@
-import { initializeApp } from 'firebase/app';
+import { initializeApp, getApps, FirebaseOptions } from 'firebase/app';
 import { getAuth, GoogleAuthProvider, signInWithPopup, signInAnonymously, signOut } from 'firebase/auth';
-import { getFirestore } from 'firebase/firestore';
-import firebaseConfig from '../firebase-applet-config.json';
+import { getFirestore, setLogLevel } from 'firebase/firestore';
+import defaultFirebaseConfig from '../firebase-applet-config.json';
 
-const app = initializeApp(firebaseConfig);
+// Disable noisy firestore connection warnings when working locally or if database is unprovisioned
+setLogLevel('error');
+
+const getFirebaseConfig = (): FirebaseOptions & { firestoreDatabaseId?: string } => {
+  try {
+    const customConfig = localStorage.getItem('mystique_firebase_config');
+    if (customConfig) {
+      return JSON.parse(customConfig);
+    }
+  } catch (e) {
+    console.error("Error parsing custom firebase config", e);
+  }
+  return defaultFirebaseConfig;
+};
+
+const config = getFirebaseConfig();
+const app = getApps().length === 0 ? initializeApp(config) : getApps()[0];
+
 export const auth = getAuth(app);
-export const db = getFirestore(app, firebaseConfig.firestoreDatabaseId);
+export const db = getFirestore(app, config.firestoreDatabaseId || undefined);
 
 export const googleProvider = new GoogleAuthProvider();
 
