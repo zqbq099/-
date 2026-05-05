@@ -17,9 +17,9 @@ export default defineConfig(({mode}) => {
         },
         includeAssets: ['favicon.ico', 'apple-touch-icon.png', 'masked-icon.svg'],
         manifest: {
-          name: 'المتحول - Mystique',
-          short_name: 'المتحول',
-          description: 'تطبيق المتحول لتوليد التطبيقات بالذكاء الاصطناعي',
+          name: 'Kon - Mystique',
+          short_name: 'Kon',
+          description: 'تطبيق Kon لتوليد التطبيقات بالذكاء الاصطناعي',
           theme_color: '#020617',
           background_color: '#020617',
           display: 'standalone',

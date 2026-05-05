@@ -10,7 +10,7 @@ import { AppTransformData } from './lib/gemini';
 export default function App() {
   const [user, setUser] = useState<User | null>(null);
   const [loading, setLoading] = useState(true);
-  const [authError, setAuthError] = useState<string | null>(null);
+  const [authError, setAuthError] = useState<React.ReactNode | null>(null);
   const [isPremium, setIsPremium] = useState(false);
   const [showHistory, setShowHistory] = useState(false);
   const [history, setHistory] = useState<SavedApp[]>([]);
@@ -75,7 +75,29 @@ export default function App() {
       setAuthError(null);
       await loginWithGoogle();
     } catch (error: any) {
-      setAuthError(error.message || 'حدث خطأ أثناء تسجيل الدخول');
+      if (error?.code === 'auth/unauthorized-domain') {
+        setAuthError(
+          <div className="flex flex-col gap-2">
+            <p>
+              النطاق الحالي غير مصرح به لتسجيل الدخول. يجب إضافته إلى إعدادات Firebase لكي يعمل.
+            </p>
+            <p className="text-xs">قم بنسخ هذا النطاق وإضافته:</p>
+            <code dir="ltr" className="bg-red-100 dark:bg-red-900/40 p-2 rounded text-sm select-all text-red-800 dark:text-red-200 font-mono text-center mb-1 border border-red-200 dark:border-red-800/50">
+              {window.location.hostname}
+            </code>
+            <a 
+              href="https://console.firebase.google.com/project/_/authentication/settings" 
+              target="_blank" 
+              rel="noreferrer" 
+              className="flex items-center justify-center gap-2 mt-2 bg-red-600 text-white rounded-lg p-2 text-sm font-medium hover:bg-red-700 transition"
+            >
+              افتح إعدادات Authorized Domains
+            </a>
+          </div>
+        );
+      } else {
+        setAuthError(error.message || 'حدث خطأ أثناء تسجيل الدخول');
+      }
     }
   };
 
@@ -146,7 +168,7 @@ export default function App() {
           <div className="w-20 h-20 bg-blue-100 dark:bg-blue-900/30 rounded-2xl mx-auto mb-6 flex items-center justify-center">
             <span className="text-4xl">🤖</span>
           </div>
-          <h1 className="text-3xl font-bold mb-2 text-gray-900 dark:text-white">المتحول</h1>
+          <h1 className="text-3xl font-bold mb-2 text-gray-900 dark:text-white">Kon</h1>
           <p className="text-gray-500 dark:text-gray-400 mb-8">
             قم بتسجيل الدخول للبدء في استخدام المساعد الذكي القادر على التحول لأي تطبيق.
           </p>
@@ -198,7 +220,7 @@ export default function App() {
           <div className="w-10 h-10 bg-blue-100 dark:bg-blue-900/30 rounded-xl flex items-center justify-center text-xl">
             🤖
           </div>
-          <h1 className="text-xl font-bold text-blue-600 dark:text-blue-400">المتحول</h1>
+          <h1 className="text-xl font-bold text-blue-600 dark:text-blue-400">Kon</h1>
         </div>
         <div className="flex items-center gap-4">
           <button 
@@ -220,7 +242,7 @@ export default function App() {
               setShowCommandPanel(true);
             }}
             className="flex items-center gap-2 px-3 py-2 rounded-lg transition-colors hover:bg-gray-100 dark:hover:bg-gray-800 text-gray-600 dark:text-gray-300"
-            title="لوحة الأوامر (التحكم بالمتحول)"
+            title="لوحة الأوامر (التحكم بـ Kon)"
           >
             <Terminal size={18} className="text-purple-600 dark:text-purple-400" />
             <span className="hidden sm:inline text-sm font-medium">لوحة الأوامر</span>
@@ -270,7 +292,7 @@ export default function App() {
       <main className="p-6 max-w-7xl mx-auto flex gap-6">
         <div className="flex-1">
           <header className="mb-12 text-center mt-8">
-            <h2 className="text-3xl font-bold mb-4 text-gray-800 dark:text-gray-100">مرحباً بك في عالم المتحول</h2>
+            <h2 className="text-3xl font-bold mb-4 text-gray-800 dark:text-gray-100">مرحباً بك في عالم Kon</h2>
             <p className="text-lg text-gray-600 dark:text-gray-400">
               يمكنك التفاعل مع المساعد الذكي من خلال النافذة العائمة. اطلب منه التحول لأي تطبيق تريده.
             </p>
@@ -304,7 +326,7 @@ export default function App() {
             <div className="flex-1 overflow-y-auto p-2">
               {history.length === 0 ? (
                 <div className="text-center p-6 text-gray-500 text-sm">
-                  لا يوجد تطبيقات محفوظة بعد. اطلب من المتحول إنشاء تطبيق!
+                  لا يوجد تطبيقات محفوظة بعد. اطلب من Kon إنشاء تطبيق!
                 </div>
               ) : (
                 <div className="space-y-2">
@@ -342,7 +364,7 @@ export default function App() {
                 </div>
                 <div>
                   <h2 className="text-lg font-bold text-gray-900 dark:text-white">لوحة الأوامر (Command Panel)</h2>
-                  <p className="text-xs text-gray-500 dark:text-gray-400">تحكم بسلوك المتحول دون قيد أو شرط</p>
+                  <p className="text-xs text-gray-500 dark:text-gray-400">تحكم بسلوك Kon دون قيد أو شرط</p>
                 </div>
               </div>
               <button 
@@ -359,7 +381,7 @@ export default function App() {
                   التعليمات المخصصة (Custom Instructions)
                 </label>
                 <p className="text-xs text-gray-500 dark:text-gray-400 mb-4">
-                  اكتب هنا أي أوامر أو قواعد تريد من المتحول الالتزام بها دائماً. هذه الأوامر لها الأولوية القصوى وستغير طريقة تفكيره وتصرفاته.
+                  اكتب هنا أي أوامر أو قواعد تريد من Kon الالتزام بها دائماً. هذه الأوامر لها الأولوية القصوى وستغير طريقة تفكيره وتصرفاته.
                 </p>
                 <textarea
                   value={tempInstructions}
@@ -414,8 +436,8 @@ export default function App() {
             
             <div className="p-6 flex-1 overflow-y-auto space-y-6">
               <div className="bg-blue-50 dark:bg-blue-900/20 text-blue-800 dark:text-blue-300 p-4 rounded-xl text-sm leading-relaxed">
-                <p className="font-bold mb-1">المتحول المستقل - Offline PWA 🚀</p>
-                <p>يمكنك استضافة المتحول بنفسك وتشغيله كـ تطبيق متكامل. لحماية بياناتك، أدخل مفاتيحك الخاصة لتظل مخزنة محلياً في جهازك ولن تشارك مع أي خادم آخر.</p>
+                <p className="font-bold mb-1">Kon المستقل - Offline PWA 🚀</p>
+                <p>يمكنك استضافة Kon بنفسك وتشغيله كـ تطبيق متكامل. لحماية بياناتك، أدخل مفاتيحك الخاصة لتظل مخزنة محلياً في جهازك ولن تشارك مع أي خادم آخر.</p>
               </div>
 
               <div>

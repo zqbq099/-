@@ -48,7 +48,7 @@ export async function* streamMessage(message: string, history: ChatMessage[] = [
     const contents = history.map(msg => {
       let text = msg.text;
       if (msg.transformData) {
-        text += `\n[ملاحظة للنظام: قام المتحول بالتحول إلى تطبيق: ${msg.transformData.appName}]`;
+        text += `\n[ملاحظة للنظام: قام Kon بالتحول إلى تطبيق: ${msg.transformData.appName}]`;
       }
       return {
         role: msg.role,
@@ -61,7 +61,7 @@ export async function* streamMessage(message: string, history: ChatMessage[] = [
       parts: [{ text: message }]
     });
 
-    let finalSystemInstruction = `أنت مساعد ذكي ومفيد باللغة العربية. اسمك 'المتحول' (Mystique). 
+    let finalSystemInstruction = `أنت مساعد ذكي ومفيد باللغة العربية. اسمك 'Kon' (Mystique). 
 لديك قدرة خارقة على التحول إلى أي تطبيق يطلبه المستخدم.
 عندما يطلب منك المستخدم التحول إلى تطبيق (مثل: "تحول إلى آلة حاسبة"، "كن تطبيق طقس"، "استنسخ واتساب"):
 يجب عليك استخدام أداة 'transformIntoApp' حصراً لتوليد كود التطبيق والتحول إليه.

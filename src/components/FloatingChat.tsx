@@ -22,7 +22,7 @@ const MystiqueEffect = ({ progress }: { progress: number }) => (
     animate={{ opacity: 1 }}
     exit={{ opacity: 0 }}
     transition={{ duration: 0.5 }}
-    className="fixed inset-0 bg-[#020617] z-[999999] flex flex-col justify-center items-center overflow-hidden"
+    className="fixed inset-0 bg-[#020617] z-[999999] flex flex-col justify-between items-center overflow-hidden py-12"
   >
     <style>{`
       @keyframes mq-morph {
@@ -35,29 +35,47 @@ const MystiqueEffect = ({ progress }: { progress: number }) => (
         100% { transform: scale(1.1); opacity: 1; }
       }
     `}</style>
-    <div className="absolute w-[200vw] h-[200vh] opacity-30" 
+    <div className="absolute inset-0 w-[200vw] h-[200vh] opacity-30 pointer-events-none" 
          style={{
            background: 'repeating-radial-gradient(circle at 50% 50%, transparent 0, #0ea5e9 2px, transparent 4px)',
            backgroundSize: '60px 60px',
            filter: 'drop-shadow(0 0 10px #38bdf8)',
-           animation: 'mq-morph 8s linear infinite'
+           animation: 'mq-morph 15s linear infinite',
+           left: '-50vw',
+           top: '-50vh'
          }}></div>
-    <div className="relative w-[150px] h-[150px] bg-[#0284c7] rounded-full mb-12"
-         style={{
-           boxShadow: '0 0 50px 20px #0ea5e9, inset 0 0 20px #e0f2fe',
-           animation: 'mq-pulse 1.5s ease-in-out infinite alternate'
-         }}></div>
-    
-    <div className="relative z-10 w-full max-w-md px-6 flex flex-col items-center">
-      <div className="text-white font-bold text-xl mb-4 tracking-widest" dir="rtl">جاري التحول...</div>
-      <div className="w-full h-2 bg-white/10 rounded-full overflow-hidden backdrop-blur-md border border-white/5 shadow-2xl">
-        <motion.div 
-          initial={{ width: '0%' }}
-          animate={{ width: `${progress}%` }}
-          className="h-full bg-gradient-to-r from-blue-500 to-cyan-400 shadow-[0_0_15px_#0ea5e9]"
-        />
+         
+    {/* Top Ad Space */}
+    <div className="relative z-20 w-full max-w-sm h-24 bg-white/5 border border-white/10 rounded-2xl flex items-center justify-center p-2 backdrop-blur-md">
+      <div className="text-white/40 text-sm italic">مساحة إعلانية (Google AdSense / Monetag)</div>
+    </div>
+
+    {/* Center Loading Logic */}
+    <div className="flex flex-col items-center">
+      <div className="relative w-[150px] h-[150px] bg-[#0284c7] rounded-full mb-12"
+           style={{
+             boxShadow: '0 0 50px 20px #0ea5e9, inset 0 0 20px #e0f2fe',
+             animation: 'mq-pulse 1.5s ease-in-out infinite alternate'
+           }}></div>
+      
+      <div className="relative z-10 w-full max-w-md px-6 flex flex-col items-center">
+        <div className="text-white font-bold text-xl mb-4 tracking-widest" dir="rtl">جاري التحول...</div>
+        <div className="w-full h-2 bg-white/10 rounded-full overflow-hidden backdrop-blur-md border border-white/5 shadow-2xl">
+          <motion.div 
+            initial={{ width: '0%' }}
+            animate={{ width: `${progress}%` }}
+            className="h-full bg-gradient-to-r from-blue-500 to-cyan-400 shadow-[0_0_15px_#0ea5e9]"
+          />
+        </div>
+        <div className="text-blue-300 text-xs mt-2 font-mono">{Math.round(progress)}%</div>
       </div>
-      <div className="text-blue-300 text-xs mt-2 font-mono">{Math.round(progress)}%</div>
+    </div>
+
+    {/* Bottom Tips / Info */}
+    <div className="relative z-20 w-full max-w-sm text-center px-4">
+      <p className="text-blue-200 text-sm leading-relaxed" dir="rtl">
+        "Kon يجمع البيانات ليخلق واجهتك الخاصة... يرجى الانتظار بضع ثوانٍ."
+      </p>
     </div>
   </motion.div>
 );
@@ -73,7 +91,7 @@ export function FloatingChat({ isPremium, onAppSelect, externalApp, customInstru
     {
       id: '1',
       role: 'model',
-      text: 'مرحباً! أنا "المتحول"، مساعدك الذكي. كيف يمكنني مساعدتك اليوم؟ يمكنك طلب التحول إلى أي تطبيق تريده.',
+      text: 'مرحباً! أنا "Kon"، مساعدك الذكي. كيف يمكنني مساعدتك اليوم؟ يمكنك طلب التحول إلى أي تطبيق تريده.',
     }
   ]);
   const [input, setInput] = useState('');
@@ -233,10 +251,16 @@ export function FloatingChat({ isPremium, onAppSelect, externalApp, customInstru
           ? { ...msg, isStreaming: false }
           : msg
       ));
-    } catch (error) {
+    } catch (error: any) {
+      console.error("Error sending message:", error);
+      let errorMessage = 'عذراً، حدث خطأ أثناء معالجة طلبك. ';
+      if (error?.message) {
+        errorMessage += `\n(السبب: ${error.message})`;
+      }
+        
       setMessages(prev => prev.map(msg => 
         msg.id === modelMessageId 
-          ? { ...msg, text: 'عذراً، حدث خطأ أثناء معالجة طلبك. يرجى المحاولة مرة أخرى.', isStreaming: false, error: true }
+          ? { ...msg, text: errorMessage, isStreaming: false, error: true }
           : msg
       ));
     } finally {
@@ -361,7 +385,7 @@ export function FloatingChat({ isPremium, onAppSelect, externalApp, customInstru
               <Bot size={20} />
             </div>
             <div>
-              <h3 className="font-semibold text-gray-800 dark:text-gray-100 text-sm">المتحول</h3>
+              <h3 className="font-semibold text-gray-800 dark:text-gray-100 text-sm">Kon</h3>
               <p className="text-xs text-green-600 dark:text-green-400 flex items-center gap-1">
                 <span className="w-1.5 h-1.5 rounded-full bg-green-500"></span>
                 متصل
@@ -455,7 +479,7 @@ export function FloatingChat({ isPremium, onAppSelect, externalApp, customInstru
                     value={input}
                     onChange={(e) => setInput(e.target.value)}
                     onKeyDown={handleKeyDown}
-                    placeholder="اسأل المتحول..."
+                    placeholder="اسأل Kon..."
                     className="w-full max-h-32 min-h-[44px] bg-transparent border-none focus:ring-0 resize-none py-3 px-4 text-sm text-gray-800 dark:text-gray-200 placeholder-gray-500"
                     rows={1}
                     dir="auto"
@@ -470,7 +494,7 @@ export function FloatingChat({ isPremium, onAppSelect, externalApp, customInstru
                 </form>
                 <div className="text-center mt-2">
                   <span className="text-[10px] text-gray-400 dark:text-gray-500">
-                    المتحول يمكن أن يخطئ. يرجى التحقق من المعلومات المهمة.
+                    Kon يمكن أن يخطئ. يرجى التحقق من المعلومات المهمة.
                   </span>
                 </div>
               </div>
