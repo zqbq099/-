@@ -222,18 +222,18 @@ export default function App() {
           </div>
           <h1 className="text-xl font-bold text-blue-600 dark:text-blue-400">Kon</h1>
         </div>
-        <div className="flex items-center gap-4">
+        <div className="flex items-center gap-2 sm:gap-4">
           <button 
             onClick={() => {
               setTempGeminiKey(localStorage.getItem('mystique_gemini_key') || '');
               setTempFirebaseConfig(localStorage.getItem('mystique_firebase_config') || '');
               setShowSettings(true);
             }}
-            className="flex items-center gap-2 px-3 py-2 rounded-lg transition-colors hover:bg-gray-100 dark:hover:bg-gray-800 text-gray-600 dark:text-gray-300"
+            className="flex items-center gap-2 px-2 sm:px-3 py-2 rounded-lg transition-colors hover:bg-gray-100 dark:hover:bg-gray-800 text-gray-600 dark:text-gray-300"
             title="الإعدادات المتقدمة"
           >
             <Settings size={18} className="text-gray-600 dark:text-gray-400" />
-            <span className="hidden sm:inline text-sm font-medium">الإعدادات</span>
+            <span className="hidden md:inline text-sm font-medium">الإعدادات</span>
           </button>
 
           <button 
@@ -241,35 +241,35 @@ export default function App() {
               setTempInstructions(customInstructions);
               setShowCommandPanel(true);
             }}
-            className="flex items-center gap-2 px-3 py-2 rounded-lg transition-colors hover:bg-gray-100 dark:hover:bg-gray-800 text-gray-600 dark:text-gray-300"
+            className="flex items-center gap-2 px-2 sm:px-3 py-2 rounded-lg transition-colors hover:bg-gray-100 dark:hover:bg-gray-800 text-gray-600 dark:text-gray-300"
             title="لوحة الأوامر (التحكم بـ Kon)"
           >
             <Terminal size={18} className="text-purple-600 dark:text-purple-400" />
-            <span className="hidden sm:inline text-sm font-medium">لوحة الأوامر</span>
+            <span className="hidden md:inline text-sm font-medium">لوحة الأوامر</span>
           </button>
 
           <button 
             onClick={() => setShowHistory(!showHistory)}
-            className={`flex items-center gap-2 px-3 py-2 rounded-lg transition-colors ${showHistory ? 'bg-blue-100 text-blue-700 dark:bg-blue-900/50 dark:text-blue-300' : 'hover:bg-gray-100 dark:hover:bg-gray-800 text-gray-600 dark:text-gray-300'}`}
+            className={`flex items-center gap-2 px-2 sm:px-3 py-2 rounded-lg transition-colors ${showHistory ? 'bg-blue-100 text-blue-700 dark:bg-blue-900/50 dark:text-blue-300' : 'hover:bg-gray-100 dark:hover:bg-gray-800 text-gray-600 dark:text-gray-300'}`}
           >
             <History size={18} />
-            <span className="hidden sm:inline text-sm font-medium">سجل التحولات</span>
+            <span className="hidden md:inline text-sm font-medium">السجل</span>
           </button>
 
           {!user.isAnonymous && (
             <button 
               onClick={togglePremium}
-              className={`flex items-center gap-2 px-3 py-2 rounded-lg transition-colors text-sm font-medium border ${isPremium ? 'bg-amber-50 border-amber-200 text-amber-700 dark:bg-amber-900/20 dark:border-amber-800 dark:text-amber-400' : 'bg-gray-50 border-gray-200 text-gray-600 hover:bg-gray-100 dark:bg-gray-800 dark:border-gray-700 dark:text-gray-400 dark:hover:bg-gray-700'}`}
+              className={`flex items-center gap-2 px-2 sm:px-3 py-2 rounded-lg transition-colors text-sm font-medium border ${isPremium ? 'bg-amber-50 border-amber-200 text-amber-700 dark:bg-amber-900/20 dark:border-amber-800 dark:text-amber-400' : 'bg-gray-50 border-gray-200 text-gray-600 hover:bg-gray-100 dark:bg-gray-800 dark:border-gray-700 dark:text-gray-400 dark:hover:bg-gray-700'}`}
               title="زر تجريبي لتغيير حالة الاشتراك"
             >
               <Crown size={16} className={isPremium ? 'text-amber-500' : 'text-gray-400'} />
-              <span className="hidden sm:inline">{isPremium ? 'حساب مدفوع' : 'ترقية'}</span>
+              <span className="hidden md:inline">{isPremium ? 'مدفوع' : 'ترقية'}</span>
             </button>
           )}
 
-          <div className="h-6 w-px bg-gray-200 dark:bg-gray-700 mx-1"></div>
+          <div className="h-6 w-px bg-gray-200 dark:bg-gray-700 mx-0.5 sm:mx-1"></div>
 
-          <div className="flex items-center gap-2 text-sm text-gray-600 dark:text-gray-300">
+          <div className="flex items-center gap-1.5 sm:gap-2 text-sm text-gray-600 dark:text-gray-300">
             <div className="w-8 h-8 rounded-full bg-gray-200 dark:bg-gray-800 overflow-hidden flex items-center justify-center">
               {user.photoURL ? (
                 <img src={user.photoURL} alt="User" className="w-full h-full object-cover" referrerPolicy="no-referrer" />
@@ -277,14 +277,14 @@ export default function App() {
                 <UserCircle className="w-5 h-5 text-gray-500" />
               )}
             </div>
-            <span className="hidden sm:inline">{user.isAnonymous ? 'زائر' : user.displayName || 'مستخدم'}</span>
+            <span className="hidden lg:inline">{user.isAnonymous ? 'زائر' : user.displayName || 'مستخدم'}</span>
           </div>
           <button
             onClick={logout}
-            className="flex items-center gap-2 text-sm text-red-600 hover:bg-red-50 dark:hover:bg-red-900/20 px-3 py-1.5 rounded-lg transition-colors"
+            className="flex items-center gap-2 text-sm text-red-600 hover:bg-red-50 dark:hover:bg-red-900/20 px-2 sm:px-3 py-1.5 rounded-lg transition-colors"
           >
             <LogOut className="w-4 h-4" />
-            <span className="hidden sm:inline">تسجيل الخروج</span>
+            <span className="hidden sm:inline text-xs sm:text-sm">خروج</span>
           </button>
         </div>
       </nav>
