@@ -1,0 +1,7 @@
+<?xml version='1.0' encoding='utf-8'?>
+<resources>
+    <string name="app_name">Kon</string>
+    <string name="title_activity_main">Kon</string>
+    <string name="package_name">com.kon.app</string>
+    <string name="custom_url_scheme">com.kon.app</string>
+</resources>
