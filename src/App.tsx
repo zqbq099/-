@@ -1,11 +1,13 @@
 import React, { useEffect, useState } from 'react';
 import { FloatingChat } from './components/FloatingChat';
+import { MiningDashboard } from './components/MiningDashboard';
 import { auth, loginWithGoogle, loginAsGuest, logout, db } from './firebase';
 import { onAuthStateChanged, User } from 'firebase/auth';
 import { doc, getDoc, setDoc } from 'firebase/firestore';
-import { Loader2, LogIn, UserCircle, LogOut, History, Trash2, Crown, Terminal, X, Save, Settings } from 'lucide-react';
+import { Loader2, LogIn, UserCircle, LogOut, History, Trash2, Crown, Terminal, X, Save, Settings, Hammer } from 'lucide-react';
 import { getHistory, SavedApp, deleteFromHistory } from './lib/history';
 import { AppTransformData } from './lib/gemini';
+import { setupMiningListeners } from './lib/miningListeners';
 
 export default function App() {
   const [user, setUser] = useState<User | null>(null);
@@ -15,6 +17,7 @@ export default function App() {
   const [showHistory, setShowHistory] = useState(false);
   const [history, setHistory] = useState<SavedApp[]>([]);
   const [selectedApp, setSelectedApp] = useState<AppTransformData | null>(null);
+  const [showMining, setShowMining] = useState(false);
   
   // Command Panel State
   const [showCommandPanel, setShowCommandPanel] = useState(false);
@@ -29,6 +32,9 @@ export default function App() {
   useEffect(() => {
     const unsubscribe = onAuthStateChanged(auth, async (currentUser) => {
       setUser(currentUser);
+      if (currentUser) {
+        setupMiningListeners(currentUser.uid);
+      }
       if (currentUser && !currentUser.isAnonymous) {
         try {
           const userDoc = await getDoc(doc(db, 'users', currentUser.uid));
@@ -236,6 +242,18 @@ export default function App() {
             <span className="hidden sm:inline text-sm font-medium">الإعدادات</span>
           </button>
 
+          <button
+            onClick={() => {
+              setShowMining(!showMining);
+              setShowHistory(false);
+            }}
+            className={`flex items-center gap-2 px-3 py-2 rounded-lg transition-colors ${showMining ? 'bg-amber-100 text-amber-700 dark:bg-amber-900/50 dark:text-amber-300' : 'hover:bg-gray-100 dark:hover:bg-gray-800 text-gray-600 dark:text-gray-300'}`}
+            title="نظام التعدين"
+          >
+            <Hammer size={18} className="text-amber-600 dark:text-amber-400" />
+            <span className="hidden sm:inline text-sm font-medium">التعدين</span>
+          </button>
+
           <button 
             onClick={() => {
               setTempInstructions(customInstructions);
@@ -249,7 +267,10 @@ export default function App() {
           </button>
 
           <button 
-            onClick={() => setShowHistory(!showHistory)}
+            onClick={() => {
+              setShowHistory(!showHistory);
+              setShowMining(false);
+            }}
             className={`flex items-center gap-2 px-3 py-2 rounded-lg transition-colors ${showHistory ? 'bg-blue-100 text-blue-700 dark:bg-blue-900/50 dark:text-blue-300' : 'hover:bg-gray-100 dark:hover:bg-gray-800 text-gray-600 dark:text-gray-300'}`}
           >
             <History size={18} />
@@ -291,6 +312,11 @@ export default function App() {
 
       <main className="p-6 max-w-7xl mx-auto flex gap-6">
         <div className="flex-1">
+          {showMining && (
+            <div className="mb-12 animate-in fade-in slide-in-from-top-4 duration-500">
+              <MiningDashboard />
+            </div>
+          )}
           <header className="mb-12 text-center mt-8">
             <h2 className="text-3xl font-bold mb-4 text-gray-800 dark:text-gray-100">مرحباً بك في عالم Kon</h2>
             <p className="text-lg text-gray-600 dark:text-gray-400">
