@@ -7,8 +7,19 @@ import { Capacitor } from '@capacitor/core';
 
 export function MiningDashboard() {
   const [state, setState] = useState<MiningState | null>(null);
+  const [localClicks, setLocalClicks] = useState(0);
   const [permissions, setPermissions] = useState({ overlay: false, accessibility: false });
   const [isNative, setIsNative] = useState(Capacitor.isNativePlatform());
+
+  useEffect(() => {
+    if (isNative) {
+      const interval = setInterval(async () => {
+        const { clicks } = await MiningBridge.getAccumulatedClicks();
+        setLocalClicks(clicks);
+      }, 2000);
+      return () => clearInterval(interval);
+    }
+  }, [isNative]);
 
   useEffect(() => {
     const user = auth.currentUser;
@@ -21,8 +32,9 @@ export function MiningDashboard() {
     const unsubscribe = subscribeToMiningState(user.uid, (newState) => {
       setState(newState);
       if (isNative && newState) {
+        // Here we combine firestore data with local clicks for display
         MiningBridge.updateMiningData({
-          totalProduct: newState.totalProduct,
+          totalProduct: newState.totalProduct + (localClicks * 0.1),
           threshold: newState.threshold
         });
       }
@@ -59,7 +71,21 @@ export function MiningDashboard() {
   const handleHarvest = async () => {
     const user = auth.currentUser;
     if (!user || !state) return;
-    if (state.totalProduct < state.threshold) {
+
+    // Before harvesting, sync all local clicks to Firebase
+    let finalClicks = localClicks;
+    if (isNative) {
+      const { clicks } = await MiningBridge.getAccumulatedClicks({ reset: true });
+      finalClicks = clicks;
+      if (finalClicks > 0) {
+        await recordAction(user.uid, finalClicks);
+      }
+    }
+
+    // Refresh state after sync
+    const currentState = await getMiningState(user.uid);
+
+    if (currentState.totalProduct < currentState.threshold) {
       alert(`تحتاج إلى ${state.threshold} من المحصول على الأقل للرفع.`);
       return;
     }
@@ -96,14 +122,14 @@ export function MiningDashboard() {
 
       <div className="grid grid-cols-1 md:grid-cols-2 gap-4 mb-6">
         <div className="bg-gray-50 dark:bg-gray-800 p-4 rounded-2xl border border-gray-100 dark:border-gray-700">
-          <div className="text-sm text-gray-500 mb-1">إجمالي النقرات/التفاعلات</div>
-          <div className="text-2xl font-bold text-gray-900 dark:text-white">{state.totalClicks}</div>
+          <div className="text-sm text-gray-500 mb-1">إجمالي النقرات (سحابي + محلي)</div>
+          <div className="text-2xl font-bold text-gray-900 dark:text-white">{state.totalClicks + localClicks}</div>
         </div>
         <div className="bg-gray-50 dark:bg-gray-800 p-4 rounded-2xl border border-gray-100 dark:border-gray-700">
           <div className="text-sm text-gray-500 mb-1">المحصول الحالي</div>
           <div className="flex items-center gap-2 text-2xl font-bold text-blue-600 dark:text-blue-400">
             <Coins size={24} />
-            {state.totalProduct.toFixed(2)}
+            {(state.totalProduct + (localClicks * 0.1)).toFixed(2)}
           </div>
         </div>
       </div>
@@ -111,12 +137,12 @@ export function MiningDashboard() {
       <div className="mb-6">
         <div className="flex justify-between text-sm mb-2">
           <span className="text-gray-500">التقدم نحو الرفع (Harvest)</span>
-          <span className="font-medium">{Math.min(100, (state.totalProduct / state.threshold) * 100).toFixed(0)}%</span>
+          <span className="font-medium">{Math.min(100, ((state.totalProduct + (localClicks * 0.1)) / state.threshold) * 100).toFixed(0)}%</span>
         </div>
         <div className="w-full h-3 bg-gray-100 dark:bg-gray-800 rounded-full overflow-hidden">
           <div
             className="h-full bg-blue-600 transition-all duration-500"
-            style={{ width: `${Math.min(100, (state.totalProduct / state.threshold) * 100)}%` }}
+            style={{ width: `${Math.min(100, ((state.totalProduct + (localClicks * 0.1)) / state.threshold) * 100)}%` }}
           />
         </div>
       </div>

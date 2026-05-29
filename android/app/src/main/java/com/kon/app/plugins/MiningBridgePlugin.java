@@ -79,7 +79,13 @@ public class MiningBridgePlugin extends Plugin {
 
     @PluginMethod
     public void getAccumulatedClicks(PluginCall call) {
-        int clicks = MiningAccessibilityService.getAndResetClicks();
+        boolean reset = call.getBoolean("reset", false);
+        int clicks;
+        if (reset) {
+            clicks = MiningAccessibilityService.getAndResetClicks(getContext());
+        } else {
+            clicks = MiningAccessibilityService.getAccumulatedClicks(getContext());
+        }
         JSObject ret = new JSObject();
         ret.put("clicks", clicks);
         call.resolve(ret);
