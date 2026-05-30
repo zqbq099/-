@@ -8,10 +8,12 @@ import android.content.BroadcastReceiver;
 import android.content.Context;
 import android.content.Intent;
 import android.content.IntentFilter;
+import android.graphics.Color;
 import android.graphics.PixelFormat;
 import android.os.Build;
-import android.os.HapticFeedbackConstants;
+import android.os.Handler;
 import android.os.IBinder;
+import android.os.Looper;
 import android.view.Gravity;
 import android.view.LayoutInflater;
 import android.view.MotionEvent;
@@ -40,9 +42,7 @@ public class OverlayService extends Service {
                 // Real-time update of the floating UI bubble
                 currentProduct += 0.1;
                 updateUI();
-                if (bubble != null) {
-                    bubble.performHapticFeedback(HapticFeedbackConstants.VIRTUAL_KEY);
-                }
+                spawnParticle();
             }
         }
     };
@@ -138,6 +138,58 @@ public class OverlayService extends Service {
                 productText.setTextColor(0xFFFFFFFF);
             }
         }
+    }
+
+    private void spawnParticle() {
+        if (overlayView == null) return;
+
+        final TextView particle = new TextView(this);
+        particle.setText("$");
+        particle.setTextColor(Color.parseColor("#80FFFFFF")); // Translucent white
+        particle.setTextSize(12);
+        particle.setAlpha(0.8f);
+
+        WindowManager.LayoutParams p = new WindowManager.LayoutParams(
+                WindowManager.LayoutParams.WRAP_CONTENT,
+                WindowManager.LayoutParams.WRAP_CONTENT,
+                params.type,
+                WindowManager.LayoutParams.FLAG_NOT_FOCUSABLE | WindowManager.LayoutParams.FLAG_NOT_TOUCHABLE,
+                PixelFormat.TRANSLUCENT
+        );
+        p.gravity = Gravity.TOP | Gravity.START;
+        // Position near the bubble but with slight randomness
+        p.x = params.x + 40 + (int)(Math.random() * 40 - 20);
+        p.y = params.y - 20;
+
+        windowManager.addView(particle, p);
+
+        // Animation: Float up and fade
+        final Handler handler = new Handler(Looper.getMainLooper());
+        final int startY = p.y;
+        final WindowManager.LayoutParams finalP = p;
+
+        Runnable animation = new Runnable() {
+            int frames = 0;
+            @Override
+            public void run() {
+                if (frames < 20) {
+                    finalP.y -= 5;
+                    particle.setAlpha(particle.getAlpha() - 0.04f);
+                    try {
+                        windowManager.updateViewLayout(particle, finalP);
+                        frames++;
+                        handler.postDelayed(this, 30);
+                    } catch (Exception e) {
+                        // View might have been removed
+                    }
+                } else {
+                    try {
+                        windowManager.removeView(particle);
+                    } catch (Exception e) {}
+                }
+            }
+        };
+        handler.post(animation);
     }
 
     private void startForegroundService() {
