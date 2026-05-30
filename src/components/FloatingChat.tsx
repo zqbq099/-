@@ -368,9 +368,10 @@ export function FloatingChat({ isPremium, onAppSelect, externalApp, customInstru
         animate={{ opacity: 1, y: 0, scale: 1 }}
         exit={{ opacity: 0, y: 20, scale: 0.95 }}
         className={cn(
-          "fixed z-50 flex flex-col bg-white dark:bg-gray-900 rounded-2xl shadow-2xl overflow-hidden border border-gray-200 dark:border-gray-800",
-          isMinimized ? "w-80 h-16" : "w-[90vw] sm:w-[400px] md:w-[450px] h-[80vh] max-h-[800px]",
-          "bottom-6 right-1/2 translate-x-1/2 sm:translate-x-0 sm:bottom-auto sm:right-auto sm:top-20 sm:left-20",
+          "fixed z-50 flex flex-col bg-white dark:bg-gray-900 shadow-2xl overflow-hidden border border-gray-200 dark:border-gray-800 transition-all duration-300",
+          isMinimized
+            ? "w-72 h-14 bottom-6 right-6 rounded-xl"
+            : "w-full h-full sm:w-[400px] md:w-[450px] sm:h-[80vh] sm:max-h-[800px] bottom-0 right-0 sm:bottom-auto sm:right-auto sm:top-20 sm:left-20 sm:rounded-2xl",
           (currentApp && !isEditChatOpen) ? "hidden" : "",
           (currentApp && isEditChatOpen) ? "z-[1000] border-blue-500/50 shadow-blue-500/20" : ""
         )}
