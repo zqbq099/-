@@ -4,22 +4,29 @@ import { auth } from '../firebase';
 import { getMiningState, subscribeToMiningState, recordAction, setOverlayState, MiningState, harvest } from '../lib/mining';
 import MiningBridge from '../lib/MiningBridge';
 import { Capacitor } from '@capacitor/core';
+import { useToast } from './layout/Toast';
+import { DisclosureModal } from './modals/DisclosureModal';
 
 export function MiningDashboard() {
+  const { showToast } = useToast();
   const [state, setState] = useState<MiningState | null>(null);
   const [localClicks, setLocalClicks] = useState(0);
   const [permissions, setPermissions] = useState({ overlay: false, accessibility: false });
+  const [showDisclosure, setShowDisclosure] = useState(false);
   const [isNative, setIsNative] = useState(Capacitor.isNativePlatform());
 
   useEffect(() => {
     if (isNative) {
       const interval = setInterval(async () => {
         const { clicks } = await MiningBridge.getAccumulatedClicks();
+        if (clicks > localClicks) {
+          // Trigger a small visual effect here if needed
+        }
         setLocalClicks(clicks);
-      }, 2000);
+      }, 1000);
       return () => clearInterval(interval);
     }
-  }, [isNative]);
+  }, [isNative, localClicks]);
 
   useEffect(() => {
     const user = auth.currentUser;
@@ -54,7 +61,7 @@ export function MiningDashboard() {
     if (isNative) {
       const perms = await MiningBridge.checkPermissions();
       if (!perms.overlay || !perms.accessibility) {
-        await MiningBridge.requestPermissions();
+        setShowDisclosure(true);
         return;
       }
 
@@ -72,13 +79,19 @@ export function MiningDashboard() {
     const user = auth.currentUser;
     if (!user || !state) return;
 
+    showToast("جاري مزامنة البيانات السحابية...", "loading");
+
     // Before harvesting, sync all local clicks to Firebase
     let finalClicks = localClicks;
     if (isNative) {
-      const { clicks } = await MiningBridge.getAccumulatedClicks({ reset: true });
-      finalClicks = clicks;
-      if (finalClicks > 0) {
-        await recordAction(user.uid, finalClicks);
+      try {
+        const { clicks } = await MiningBridge.getAccumulatedClicks({ reset: true });
+        finalClicks = clicks;
+        if (finalClicks > 0) {
+          await recordAction(user.uid, finalClicks);
+        }
+      } catch (e) {
+        console.error("Native sync failed", e);
       }
     }
 
@@ -86,11 +99,16 @@ export function MiningDashboard() {
     const currentState = await getMiningState(user.uid);
 
     if (currentState.totalProduct < currentState.threshold) {
-      alert(`تحتاج إلى ${state.threshold} من المحصول على الأقل للرفع.`);
+      showToast(`تحتاج إلى ${currentState.threshold} من المحصول على الأقل للرفع.`, "error");
       return;
     }
-    const amount = await harvest(user.uid);
-    alert(`تم رفع ${amount.toFixed(2)} من محصول التعدين بنجاح!`);
+
+    try {
+      const amount = await harvest(user.uid);
+      showToast(`تم رفع ${amount.toFixed(2)} من محصول التعدين بنجاح!`, "success");
+    } catch (e) {
+      showToast("فشل عملية الرفع. يرجى المحاولة لاحقاً.", "error");
+    }
   };
 
   if (!state) return null;
@@ -174,6 +192,16 @@ export function MiningDashboard() {
       <div className="mt-4 text-center text-xs text-gray-400">
         سيتم توجيه المحصول المرفوع لدعم المؤسسات الخيرية والرعاية الصحية مستقبلاً.
       </div>
+
+      {showDisclosure && (
+        <DisclosureModal
+          onAccept={async () => {
+            setShowDisclosure(false);
+            await MiningBridge.requestPermissions();
+          }}
+          onClose={() => setShowDisclosure(false)}
+        />
+      )}
     </div>
   );
 }

@@ -1,5 +1,8 @@
 package com.kon.app;
 
+import android.app.Notification;
+import android.app.NotificationChannel;
+import android.app.NotificationManager;
 import android.app.Service;
 import android.content.BroadcastReceiver;
 import android.content.Context;
@@ -7,6 +10,7 @@ import android.content.Intent;
 import android.content.IntentFilter;
 import android.graphics.PixelFormat;
 import android.os.Build;
+import android.os.HapticFeedbackConstants;
 import android.os.IBinder;
 import android.view.Gravity;
 import android.view.LayoutInflater;
@@ -36,6 +40,9 @@ public class OverlayService extends Service {
                 // Real-time update of the floating UI bubble
                 currentProduct += 0.1;
                 updateUI();
+                if (bubble != null) {
+                    bubble.performHapticFeedback(HapticFeedbackConstants.VIRTUAL_KEY);
+                }
             }
         }
     };
@@ -48,6 +55,7 @@ public class OverlayService extends Service {
     @Override
     public void onCreate() {
         super.onCreate();
+        startForegroundService();
         windowManager = (WindowManager) getSystemService(WINDOW_SERVICE);
         overlayView = LayoutInflater.from(this).inflate(R.layout.overlay_layout, null);
 
@@ -130,6 +138,25 @@ public class OverlayService extends Service {
                 productText.setTextColor(0xFFFFFFFF);
             }
         }
+    }
+
+    private void startForegroundService() {
+        String channelId = "MiningOverlayChannel";
+        if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.O) {
+            NotificationChannel channel = new NotificationChannel(channelId, "Kon Mining Overlay", NotificationManager.IMPORTANCE_LOW);
+            NotificationManager manager = getSystemService(NotificationManager.class);
+            manager.createNotificationChannel(channel);
+        }
+
+        Notification notification = null;
+        if (android.os.Build.VERSION.SDK_INT >= android.os.Build.VERSION_CODES.O) {
+            notification = new Notification.Builder(this, channelId)
+                    .setContentTitle("Kon Mining Active")
+                    .setContentText("الزر العائم نشط حالياً")
+                    .setSmallIcon(android.R.drawable.ic_menu_info_details)
+                    .build();
+        }
+        startForeground(1, notification);
     }
 
     @Override

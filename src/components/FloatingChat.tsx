@@ -123,6 +123,9 @@ export function FloatingChat({ isPremium, onAppSelect, externalApp, customInstru
   // Handle messages from the iframe
   useEffect(() => {
     const handleMessage = async (event: MessageEvent) => {
+      // Security: Only accept messages from the iframe we controlled
+      if (iframeRef.current && event.source !== iframeRef.current.contentWindow) return;
+
       if (!currentApp || !event.data || !event.data.type) return;
 
       const { type, collection: subCollection, data } = event.data;
