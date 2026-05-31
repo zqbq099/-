@@ -6,7 +6,7 @@ export interface MiningBridgePlugin {
   checkPermissions(): Promise<{ overlay: boolean, accessibility: boolean }>;
   requestPermissions(): Promise<void>;
   updateMiningData(data: { totalProduct: number, threshold: number }): Promise<void>;
-  getAccumulatedClicks(options?: { reset: boolean }): Promise<{ clicks: number }>;
+  getAccumulatedData(options?: { reset: boolean }): Promise<{ clicks: number, timeMs: number }>;
   addListener(eventName: 'actionDetected', listenerFunc: () => void): Promise<any>;
 }
 

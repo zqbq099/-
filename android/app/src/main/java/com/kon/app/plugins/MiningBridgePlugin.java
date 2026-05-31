@@ -55,7 +55,6 @@ public class MiningBridgePlugin extends Plugin {
     public void checkPermissions(PluginCall call) {
         JSObject ret = new JSObject();
         ret.put("overlay", Settings.canDrawOverlays(getContext()));
-        // Check accessibility service status
         boolean isAccessibilityEnabled = isAccessibilityServiceEnabled();
         ret.put("accessibility", isAccessibilityEnabled);
         call.resolve(ret);
@@ -78,16 +77,18 @@ public class MiningBridgePlugin extends Plugin {
     }
 
     @PluginMethod
-    public void getAccumulatedClicks(PluginCall call) {
+    public void getAccumulatedData(PluginCall call) {
         boolean reset = call.getBoolean("reset", false);
-        int clicks;
+        MiningAccessibilityService.JSObject data;
         if (reset) {
-            clicks = MiningAccessibilityService.getAndResetClicks(getContext());
+            data = MiningAccessibilityService.getAndResetData(getContext());
         } else {
-            clicks = MiningAccessibilityService.getAccumulatedClicks(getContext());
+            data = MiningAccessibilityService.getAccumulatedData(getContext());
         }
+
         JSObject ret = new JSObject();
-        ret.put("clicks", clicks);
+        ret.put("clicks", data.getInt("clicks"));
+        ret.put("timeMs", data.getLong("timeMs"));
         call.resolve(ret);
     }
 
@@ -96,7 +97,6 @@ public class MiningBridgePlugin extends Plugin {
         double totalProduct = call.getDouble("totalProduct", 0.0);
         int threshold = call.getInt("threshold", 100);
 
-        // Broadcast to overlay service
         Intent intent = new Intent("com.kon.app.UPDATE_MINING");
         intent.putExtra("totalProduct", totalProduct);
         intent.putExtra("threshold", threshold);

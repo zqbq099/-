@@ -30,6 +30,9 @@ public class OverlayService extends Service {
 
     private double currentProduct = 0.0;
     private int threshold = 100;
+    private int activeParticles = 0;
+    private static final int MAX_PARTICLES = 10;
+    private final Handler mainHandler = new Handler(Looper.getMainLooper());
 
     private final BroadcastReceiver receiver = new BroadcastReceiver() {
         @Override
@@ -141,15 +144,16 @@ public class OverlayService extends Service {
     }
 
     private void spawnParticle() {
-        if (overlayView == null) return;
+        if (overlayView == null || activeParticles >= MAX_PARTICLES) return;
 
+        activeParticles++;
         final TextView particle = new TextView(this);
         particle.setText("$");
         particle.setTextColor(Color.parseColor("#80FFFFFF")); // Translucent white
         particle.setTextSize(12);
         particle.setAlpha(0.8f);
 
-        WindowManager.LayoutParams p = new WindowManager.LayoutParams(
+        final WindowManager.LayoutParams p = new WindowManager.LayoutParams(
                 WindowManager.LayoutParams.WRAP_CONTENT,
                 WindowManager.LayoutParams.WRAP_CONTENT,
                 params.type,
@@ -157,39 +161,38 @@ public class OverlayService extends Service {
                 PixelFormat.TRANSLUCENT
         );
         p.gravity = Gravity.TOP | Gravity.START;
-        // Position near the bubble but with slight randomness
         p.x = params.x + 40 + (int)(Math.random() * 40 - 20);
         p.y = params.y - 20;
 
-        windowManager.addView(particle, p);
+        try {
+            windowManager.addView(particle, p);
+        } catch (Exception e) {
+            activeParticles--;
+            return;
+        }
 
-        // Animation: Float up and fade
-        final Handler handler = new Handler(Looper.getMainLooper());
-        final int startY = p.y;
-        final WindowManager.LayoutParams finalP = p;
-
-        Runnable animation = new Runnable() {
+        mainHandler.post(new Runnable() {
             int frames = 0;
             @Override
             public void run() {
                 if (frames < 20) {
-                    finalP.y -= 5;
+                    p.y -= 5;
                     particle.setAlpha(particle.getAlpha() - 0.04f);
                     try {
-                        windowManager.updateViewLayout(particle, finalP);
+                        windowManager.updateViewLayout(particle, p);
                         frames++;
-                        handler.postDelayed(this, 30);
+                        mainHandler.postDelayed(this, 30);
                     } catch (Exception e) {
-                        // View might have been removed
+                        activeParticles--;
                     }
                 } else {
                     try {
                         windowManager.removeView(particle);
                     } catch (Exception e) {}
+                    activeParticles--;
                 }
             }
-        };
-        handler.post(animation);
+        });
     }
 
     private void startForegroundService() {
